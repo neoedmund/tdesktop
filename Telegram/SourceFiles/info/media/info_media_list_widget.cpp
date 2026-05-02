@@ -76,6 +76,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QApplication>
 #include <QtGui/QClipboard>
 
+void LogMediaClick(const FullMsgId& id, const QString& type);
+
 namespace Info {
 namespace Media {
 namespace {
@@ -610,6 +612,11 @@ void ListWidget::openDocument(
 		not_null<DocumentData*> document,
 		FullMsgId id,
 		bool showInMediaView) {
+
+	if (document->isVideoFile() || document->isVideoMessage()) {
+		LogMediaClick(id, "video");
+	}
+	
 	const auto albumId = _controller->storiesAlbumId();
 	const auto context = Data::StoriesContext{
 		Data::StoriesContextAlbum{ albumId }

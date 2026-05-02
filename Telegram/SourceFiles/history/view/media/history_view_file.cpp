@@ -16,6 +16,26 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_file_click_handler.h"
 #include "data/data_session.h"
 #include "styles/style_chat.h"
+#include <QDateTime>
+
+
+void LogMediaClick(const FullMsgId& id, const QString& type) {
+		const QString logPath = QDir::homePath() + "/tg_media_clicks.log";
+    QFile file(logPath);
+    if (file.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&file);
+        	QString link = QString("https://t.me/c/%1/%2")
+						.arg(id.peer.value)      // correct PeerId
+            .arg(id.msg.bare);        // correct MsgId
+						
+        out << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+            << " | " << type
+            << " | " << link << "\n";
+    }else {
+        // Optional: show error in console if file can't be created
+        qDebug() << "Failed to open log file:" << logPath;
+    }
+}
 
 namespace HistoryView {
 
@@ -124,6 +144,12 @@ void File::setDocumentLinks(
 		std::make_shared<DocumentOpenClickHandler>(
 			document,
 			crl::guard(this, [=](FullMsgId id) {
+
+			// === YOUR LOG FOR VIDEO CLICK GOES HERE ===
+			if (document->isVideoFile() || document->isVideoMessage()) {
+				LogMediaClick(id, "video");
+			}
+
 				if (!openHook || !openHook()) {
 					_parent->delegate()->elementOpenDocument(document, id);
 				}
