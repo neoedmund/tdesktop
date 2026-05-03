@@ -18,23 +18,48 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include <QDateTime>
 
+#include "core/application.h"
+#include "data/data_peer.h"
+#include "data/data_channel.h"
+#include "main/main_session.h"
+#include "data/data_session.h"
 
 void LogMediaClick(const FullMsgId& id, const QString& type) {
-		const QString logPath = QDir::homePath() + "/tg_media_clicks.log";
+    const QString logPath = QDir::homePath() + "/tg_media_clicks.log";
+
     QFile file(logPath);
-    if (file.open(QIODevice::Append | QIODevice::Text)) {
-        QTextStream out(&file);
-        	QString link = QString("https://t.me/c/%1/%2")
-						.arg(id.peer.value)      // correct PeerId
-            .arg(id.msg.bare);        // correct MsgId
-						
-        out << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
-            << " | " << type
-            << " | " << link << "\n";
-    }else {
-        // Optional: show error in console if file can't be created
-        qDebug() << "Failed to open log file:" << logPath;
+    if (!file.open(QIODevice::Append | QIODevice::Text)) {
+        return;
     }
+
+    
+
+    // === Prefer username link[](https://t.me/engChatId/2794) when possible ===
+    QString link;
+   if (const auto session = Core::App().maybePrimarySession()) {
+        if (const auto peer = session->data().peer(id.peer)) {
+            if (const auto channel = peer->asChannel()) {
+                if (const auto &username = channel->username(); !username.isEmpty()) {
+                    link = QString("https://t.me/%1/%2")
+                        .arg(username)
+                        .arg(id.msg.bare);
+                }
+            }
+        }
+    }
+
+    // Fallback to numeric link only if no username
+    if (link.isEmpty()) {
+        link = QString("https://t.me/c/%1/%2")
+           .arg(id.peer.value)
+            .arg(id.msg.bare);
+    }
+    
+		QTextStream out(&file);
+    out << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+        << " | " << type
+        << " | " << link
+        << "\n";
 }
 
 namespace HistoryView {

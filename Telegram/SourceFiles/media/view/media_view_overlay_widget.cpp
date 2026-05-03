@@ -107,7 +107,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QScreen>
 
 #include <kurlmimedata.h>
-
+void LogMediaClick(const FullMsgId& id, const QString& type);
 namespace Media {
 namespace View {
 namespace {
@@ -5925,6 +5925,17 @@ bool OverlayWidget::moveToEntity(const Entity &entity, int preloadDelta) {
 	}
 	clearStreaming();
 	_streamingStartPaused = false;
+	
+	// === YOUR LOG FOR LEFT/RIGHT NAVIGATION (new video) ===
+	if (const auto item = entity.item) {
+		const auto fullId = item->fullId();   // FullMsgId of the NEW video
+		if (const auto doc = item->media() ? item->media()->document() : nullptr) {
+		//	if (doc->isVideoFile() || doc->isVideoMessage()) {
+				LogMediaClick(fullId, "media");
+			//}
+		}
+	}
+	
 	if (auto photo = std::get_if<not_null<PhotoData*>>(&entity.data)) {
 		displayPhoto(*photo);
 	} else if (auto document = std::get_if<not_null<DocumentData*>>(&entity.data)) {
