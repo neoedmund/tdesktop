@@ -32,7 +32,12 @@ void LogMediaClick(const FullMsgId& id, const QString& type) {
         return;
     }
 
-    
+    QString msgText;
+    if (const auto session = Core::App().maybePrimarySession()) {
+        if (const auto item = session->data().message(id)) {
+            msgText = item->originalText().text;
+        }
+    }
 
     // === Prefer username link[](https://t.me/engChatId/2794) when possible ===
     QString link;
@@ -59,6 +64,7 @@ void LogMediaClick(const FullMsgId& id, const QString& type) {
     out << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
         << " | " << type
         << " | " << link
+        << " | Text: " << msgText.replace('\n', ' ').replace('\r', ' ').trimmed()
         << "\n";
 }
 
