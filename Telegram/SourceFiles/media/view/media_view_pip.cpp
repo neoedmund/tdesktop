@@ -33,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/gl/gl_surface.h"
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
+#include <QWheelEvent>
 #include "window/window_controller.h"
 #include "styles/style_widgets.h"
 #include "styles/style_window.h"
@@ -41,6 +42,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QWindow>
 #include <QtGui/QScreen>
 #include <QtWidgets/QApplication>
+#include <QtCore/QSize>
 
 namespace Media {
 namespace View {
@@ -963,6 +965,7 @@ void Pip::setupPanel() {
 		return original.isEmpty() ? QSize(1, 1) : original;
 	}();
 	_panel.setAspectRatio(FlipSizeByRotation(size, _rotation));
+	_zoom = 1.;
 	_panel.setPosition(Deserialize(_delegate->pipLoadGeometry()));
 	_panel.widget()->show();
 
@@ -993,6 +996,9 @@ void Pip::setupPanel() {
 			break;
 		case QEvent::MouseButtonDblClick:
 			handleDoubleClick(mouseButton());
+			break;
+		case QEvent::Wheel:
+			handleWheel(static_cast<QWheelEvent*>(e.get()));
 			break;
 		}
 	}, _panel.rp()->lifetime());
@@ -1074,6 +1080,7 @@ void Pip::updateActiveState(OverState wasShown) {
 	};
 	check(_close);
 	check(_enlarge);
+	check(_rotate);
 	check(_play);
 	check(_playback);
 	check(_volumeToggle);
@@ -1132,6 +1139,7 @@ void Pip::handleMouseRelease(QPoint position, Qt::MouseButton button) {
 		switch (_over) {
 		case OverState::Close: _panel.widget()->close(); break;
 		case OverState::Enlarge: _closeAndContinue(); break;
+		case OverState::Rotate: rotate(); break;
 		case OverState::VolumeToggle: volumeToggled(); break;
 		case OverState::Other: playbackPauseResume(); break;
 		}
@@ -1146,6 +1154,41 @@ void Pip::handleDoubleClick(Qt::MouseButton button) {
 	}
 	playbackPauseResume(); // Un-click the first click.
 	_closeAndContinue();
+}
+
+void Pip::rotate() {
+	_rotation = (_rotation + 270) % 360;
+	_data->owner().mediaRotation().set(_data, _rotation);
+	const auto currentSize = (_instance && !_instance->info().video.size.isEmpty())
+		? _instance->info().video.size
+		: _data->dimensions;
+	_panel.setAspectRatio(FlipSizeByRotation(currentSize, _rotation));
+	_panel.update();
+	updateDesiredFrameSize();
+}
+
+void Pip::handleWheel(not_null<QWheelEvent*> e) {
+	constexpr auto step = int(QWheelEvent::DefaultDeltasPerStep);
+	auto delta = e->angleDelta().y();
+	while (qAbs(delta) >= step) {
+		if (delta > 0) {
+			_zoom = std::min(_zoom * 1.2, 4.0);
+			delta -= step;
+		} else {
+			_zoom = std::max(_zoom / 1.2, 0.25);
+			delta += step;
+		}
+	}
+	_panel.update();
+	updateDesiredFrameSize();
+}
+
+void Pip::updateDesiredFrameSize() {
+	if (_instance) {
+		auto r = Streaming::FrameRequest();
+		r.resize = (QSizeF(_panel.inner().size()) * style::DevicePixelRatio() * _zoom).toSize();
+		(void)_instance->frame(r);
+	}
 }
 
 void Pip::seekUpdate(QPoint position) {
@@ -1223,6 +1266,7 @@ void Pip::volumeControllerUpdate(QPoint position) {
 void Pip::setupButtons() {
 	_close.state = OverState::Close;
 	_enlarge.state = OverState::Enlarge;
+	_rotate.state = OverState::Rotate;
 	_playback.state = OverState::Playback;
 	_volumeToggle.state = OverState::VolumeToggle;
 	_volumeController.state = OverState::VolumeController;
@@ -1242,6 +1286,11 @@ void Pip::setupButtons() {
 			rect.y(),
 			st::pipEnlargeIcon.width() + 2 * skip,
 			st::pipEnlargeIcon.height() + 2 * skip);
+		_rotate.area = QRect(
+			_enlarge.area.x() + _enlarge.area.width(),
+			rect.y(),
+			st::pipRotateIcon.width() + 2 * skip,
+			st::pipRotateIcon.height() + 2 * skip);
 
 		const auto volumeSkip = st::pipPlaybackSkip;
 		const auto volumeHeight = 2 * volumeSkip + st::pipPlaybackWide;
@@ -1252,6 +1301,7 @@ void Pip::setupButtons() {
 		const auto volumeWidth = (((st::mediaviewVolumeWidth + 2 * skip)
 			+ _close.area.width()
 			+ _enlarge.area.width()
+			+ _rotate.area.width()
 			+ volumeToggleWidth) < rect.width())
 				? st::mediaviewVolumeWidth
 				: 0;
@@ -1277,12 +1327,18 @@ void Pip::setupButtons() {
 				+ rect.width()
 				- (_enlarge.area.x() - rect.x())
 				- _enlarge.area.width());
+			_rotate.area.moveLeft(rect.x()
+				+ rect.width()
+				- (_rotate.area.x() - rect.x())
+				- _rotate.area.width());
 			_volumeToggle.area.moveLeft(rect.x());
 			_volumeController.area.moveLeft(_volumeToggle.area.x()
 				+ _volumeToggle.area.width());
 		}
 		_close.icon = _close.area.marginsRemoved({ skip, skip, skip, skip });
 		_enlarge.icon = _enlarge.area.marginsRemoved(
+			{ skip, skip, skip, skip });
+		_rotate.icon = _rotate.area.marginsRemoved(
 			{ skip, skip, skip, skip });
 		_volumeToggle.icon = _volumeToggle.area.marginsRemoved(
 			{ skip, skip, skip, skip });
@@ -1424,6 +1480,7 @@ void Pip::paint(not_null<Renderer*> renderer) const {
 		.outer = _panel.widget()->size(),
 		.rotation = _rotation,
 		.videoRotation = _instance->info().video.rotation,
+		.scale = _zoom,
 		.useTransparency = _panel.useTransparency(),
 	};
 	if (canUseVideoFrame()) {
@@ -1468,6 +1525,7 @@ void Pip::paintButtons(not_null<Renderer*> renderer, float64 shown) const {
 		_showPause ? st::pipPauseIconOver : st::pipPlayIconOver);
 	drawOne(_close, st::pipCloseIcon, st::pipCloseIconOver);
 	drawOne(_enlarge, st::pipEnlargeIcon, st::pipEnlargeIconOver);
+	drawOne(_rotate, st::pipRotateIcon, st::pipRotateIconOver);
 	const auto volume = Core::App().settings().videoVolume();
 	if (volume <= 0.) {
 		drawOne(
@@ -1622,6 +1680,8 @@ void Pip::handleStreamingUpdate(Streaming::Update &&update) {
 	v::match(update.data, [&](const Information &update) {
 		_panel.setAspectRatio(
 			FlipSizeByRotation(update.video.size, _rotation));
+		_zoom = 1.;
+		updateDesiredFrameSize();
 		_qualityChangeFrame = QImage();
 	}, [&](PreloadedVideo) {
 		updatePlaybackState();
@@ -1763,6 +1823,14 @@ Streaming::FrameWithInfo Pip::videoFrameWithInfo() const {
 	return _instance->frameWithInfo();
 }
 
+Streaming::FrameWithInfo Pip::videoFrameWithInfo(const FrameRequest &request) const {
+	Expects(canUseVideoFrame());
+
+	// Also register the request so the player prepares at the zoomed/rotated size.
+	(void)_instance->frame(request);  // updates the track's requests; result ignored (we want YUV data)
+	return _instance->frameWithInfo(request);
+}
+
 QImage Pip::staticContent() const {
 	const auto &cover = !_qualityChangeFrame.isNull()
 		? _qualityChangeFrame
@@ -1855,6 +1923,8 @@ Pip::OverState Pip::computeState(QPoint position) const {
 		return OverState::Close;
 	} else if (_enlarge.area.contains(position)) {
 		return OverState::Enlarge;
+	} else if (_rotate.area.contains(position)) {
+		return OverState::Rotate;
 	} else if (_playback.area.contains(position)) {
 		return OverState::Playback;
 	} else if (_volumeToggle.area.contains(position)) {

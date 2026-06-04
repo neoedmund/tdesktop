@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_info.h"
 #include "styles/style_media_view.h"
 #include "styles/style_calls.h" // st::callShadow.
+#include <QtCore/QSize>
 
 namespace Media::View {
 namespace {
@@ -291,7 +292,13 @@ std::optional<QColor> Pip::RendererGL::clearColor() {
 
 void Pip::RendererGL::paintTransformedVideoFrame(
 		ContentGeometry geometry) {
-	const auto data = _owner->videoFrameWithInfo();
+	// Build a request so YUV frames are prepared at the correct zoomed size.
+	// For the GL YUV path we request based on the target window size * zoom (rotation
+	// is applied in the vertex shader, so we don't unrotate the request here).
+	Streaming::FrameRequest req;
+	req.outer = (QSizeF(geometry.inner.size()) * style::DevicePixelRatio() * geometry.scale).toSize();
+	req.resize = req.outer;
+	const auto data = _owner->videoFrameWithInfo(req);
 	if (data.format == Streaming::FrameFormat::None) {
 		return;
 	}
@@ -409,22 +416,28 @@ void Pip::RendererGL::paintTransformedContent(
 	}
 	const auto xscale = 1.f / geometry.inner.width();
 	const auto yscale = 1.f / geometry.inner.height();
+	auto ux = xscale;
+	auto uy = yscale;
+	if (geometry.scale != 1.f) {
+		ux /= geometry.scale;
+		uy /= geometry.scale;
+	}
 	const GLfloat coords[] = {
 		rect[0][0], rect[0][1],
-		-geometry.inner.x() * xscale,
-		-geometry.inner.y() * yscale,
+		-geometry.inner.x() * ux,
+		-geometry.inner.y() * uy,
 
 		rect[1][0], rect[1][1],
-		(geometry.outer.width() - geometry.inner.x()) * xscale,
-		-geometry.inner.y() * yscale,
+		(geometry.outer.width() - geometry.inner.x()) * ux,
+		-geometry.inner.y() * uy,
 
 		rect[2][0], rect[2][1],
-		(geometry.outer.width() - geometry.inner.x()) * xscale,
-		(geometry.outer.height() - geometry.inner.y()) * yscale,
+		(geometry.outer.width() - geometry.inner.x()) * ux,
+		(geometry.outer.height() - geometry.inner.y()) * uy,
 
 		rect[3][0], rect[3][1],
-		-geometry.inner.x() * xscale,
-		(geometry.outer.height() - geometry.inner.y()) * yscale,
+		-geometry.inner.x() * ux,
+		(geometry.outer.height() - geometry.inner.y()) * uy,
 	};
 
 	_contentBuffer->bind();

@@ -157,6 +157,7 @@ private:
 		None,
 		Close,
 		Enlarge,
+		Rotate,
 		Playback,
 		VolumeToggle,
 		VolumeController,
@@ -182,6 +183,7 @@ private:
 		QSize outer;
 		int rotation = 0;
 		int videoRotation = 0;
+		float64 scale = 1.;
 		bool useTransparency = false;
 	};
 	struct StaticContent {
@@ -213,6 +215,7 @@ private:
 	[[nodiscard]] bool canUseVideoFrame() const;
 	[[nodiscard]] QImage videoFrame(const FrameRequest &request) const;
 	[[nodiscard]] Streaming::FrameWithInfo videoFrameWithInfo() const; // YUV
+	[[nodiscard]] Streaming::FrameWithInfo videoFrameWithInfo(const FrameRequest &request) const; // YUV with specific request size (for zoom etc)
 	[[nodiscard]] QImage staticContent() const;
 	[[nodiscard]] OverState computeState(QPoint position) const;
 	void setOverState(OverState state);
@@ -234,6 +237,10 @@ private:
 	void handleDoubleClick(Qt::MouseButton button);
 	void handleLeave();
 	void handleClose();
+	void rotate();
+	void handleWheel(not_null<QWheelEvent*> e);
+
+	void updateDesiredFrameSize();
 
 	void paintRadialLoadingContent(
 		QPainter &p,
@@ -289,6 +296,7 @@ private:
 	QString _timeAlready, _timeLeft;
 	int _timeLeftWidth = 0;
 	int _rotation = 0;
+	float64 _zoom = 1.;
 	float64 _lastPositiveVolume = 1.;
 	crl::time _seekPositionMs = -1;
 	crl::time _lastDurationMs = 0;
@@ -297,6 +305,7 @@ private:
 	std::optional<OverState> _lastHandledPress;
 	Button _close;
 	Button _enlarge;
+	Button _rotate;
 	Button _playback;
 	Button _play;
 	Button _volumeToggle;

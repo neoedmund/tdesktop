@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/shadow.h"
 #include "ui/painter.h"
 #include "styles/style_calls.h" // st::callShadow.
+#include <QtCore/QSize>
 
 namespace Media::View {
 namespace {
@@ -137,7 +138,7 @@ Pip::FrameRequest Pip::RendererSW::frameRequest(
 		ContentGeometry geometry) const {
 	using namespace Images;
 	auto result = FrameRequest();
-	result.outer = geometry.inner.size() * style::DevicePixelRatio();
+	result.outer = (QSizeF(geometry.inner.size()) * style::DevicePixelRatio() * geometry.scale).toSize();
 	result.resize = result.outer;
 	result.rounding = CornersMaskRef(CornersMask(ImageRoundRadius::Large));
 	if (geometry.attached & (RectPart::Top | RectPart::Left)) {
@@ -186,6 +187,13 @@ void Pip::RendererSW::paintTransformedImage(
 		Ui::Shadow::paint(*_p, rect, geometry.outer.width(), st::callShadow);
 	}
 
+	if (geometry.scale != 1.) {
+		_p->save();
+		const auto c = rect.center();
+		_p->translate(c);
+		_p->scale(geometry.scale, geometry.scale);
+		_p->translate(-c);
+	}
 	if (UsePainterRotation(rotation)) {
 		if (rotation) {
 			_p->save();
@@ -198,6 +206,9 @@ void Pip::RendererSW::paintTransformedImage(
 		}
 	} else {
 		_p->drawImage(rect, RotateFrameImage(image, rotation));
+	}
+	if (geometry.scale != 1.) {
+		_p->restore();
 	}
 
 	if (geometry.fade > 0) {

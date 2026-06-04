@@ -408,6 +408,8 @@ pipCloseIcon: icon {{ "player/player_pip_close", mediaviewPipControlsFg }};
 pipCloseIconOver: icon {{ "player/player_pip_close", mediaviewPipControlsFgOver }};
 pipEnlargeIcon: icon {{ "player/player_pip_enlarge", mediaviewPipControlsFg }};
 pipEnlargeIconOver: icon {{ "player/player_pip_enlarge", mediaviewPipControlsFgOver }};
+pipRotateIcon: icon {{ "mediaview/rotate", mediaviewPipControlsFg }};
+pipRotateIconOver: icon {{ "mediaview/rotate", mediaviewPipControlsFgOver }};
 pipVolumeIcon0: icon {{ "player/player_volume_off", mediaviewPipControlsFg }};
 pipVolumeIcon0Over: icon {{ "player/player_volume_off", mediaviewPipControlsFgOver }};
 pipVolumeIcon1: icon {{ "player/player_volume_small", mediaviewPipControlsFg }};
