@@ -281,7 +281,7 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 			return std::make_unique<Data::MediaPhoto>(
 				item,
 				item->history()->owner().processPhoto(photo),
-				media.is_spoiler());
+				false);
 		}, [](const MTPDphotoEmpty &) -> Result {
 			return nullptr;
 		});
@@ -311,7 +311,7 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 				.videoTimestamp = media.vvideo_timestamp().value_or_empty(),
 				.hasQualitiesList = list && !list->v.isEmpty(),
 				.skipPremiumEffect = media.is_nopremium(),
-				.spoiler = media.is_spoiler(),
+				.spoiler = false,
 			});
 		}, [](const MTPDdocumentEmpty &) -> Result {
 			return nullptr;
@@ -2586,7 +2586,7 @@ bool HistoryItem::canStopPoll() const {
 }
 
 bool HistoryItem::forbidsForward() const {
-	return (_flags & MessageFlag::NoForwards);
+	return false;
 }
 
 bool HistoryItem::forbidsSaving() const {
