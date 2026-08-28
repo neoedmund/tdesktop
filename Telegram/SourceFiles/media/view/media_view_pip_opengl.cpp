@@ -292,13 +292,7 @@ std::optional<QColor> Pip::RendererGL::clearColor() {
 
 void Pip::RendererGL::paintTransformedVideoFrame(
 		ContentGeometry geometry) {
-	// Build a request so YUV frames are prepared at the correct zoomed size.
-	// For the GL YUV path we request based on the target window size * zoom (rotation
-	// is applied in the vertex shader, so we don't unrotate the request here).
-	Streaming::FrameRequest req;
-	req.outer = (QSizeF(geometry.inner.size()) * style::DevicePixelRatio() * geometry.scale).toSize();
-	req.resize = req.outer;
-	const auto data = _owner->videoFrameWithInfo(req);
+	const auto data = _owner->videoFrameWithInfo();
 	if (data.format == Streaming::FrameFormat::None) {
 		return;
 	}

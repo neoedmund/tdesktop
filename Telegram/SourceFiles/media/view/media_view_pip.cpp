@@ -1164,7 +1164,6 @@ void Pip::rotate() {
 		: _data->dimensions;
 	_panel.setAspectRatio(FlipSizeByRotation(currentSize, _rotation));
 	_panel.update();
-	updateDesiredFrameSize();
 }
 
 void Pip::handleWheel(not_null<QWheelEvent*> e) {
@@ -1180,15 +1179,6 @@ void Pip::handleWheel(not_null<QWheelEvent*> e) {
 		}
 	}
 	_panel.update();
-	updateDesiredFrameSize();
-}
-
-void Pip::updateDesiredFrameSize() {
-	if (_instance) {
-		auto r = Streaming::FrameRequest();
-		r.resize = (QSizeF(_panel.inner().size()) * style::DevicePixelRatio() * _zoom).toSize();
-		(void)_instance->frame(r);
-	}
 }
 
 void Pip::seekUpdate(QPoint position) {
@@ -1681,7 +1671,6 @@ void Pip::handleStreamingUpdate(Streaming::Update &&update) {
 		_panel.setAspectRatio(
 			FlipSizeByRotation(update.video.size, _rotation));
 		_zoom = 1.;
-		updateDesiredFrameSize();
 		_qualityChangeFrame = QImage();
 	}, [&](PreloadedVideo) {
 		updatePlaybackState();
@@ -1821,14 +1810,6 @@ Streaming::FrameWithInfo Pip::videoFrameWithInfo() const {
 	Expects(canUseVideoFrame());
 
 	return _instance->frameWithInfo();
-}
-
-Streaming::FrameWithInfo Pip::videoFrameWithInfo(const FrameRequest &request) const {
-	Expects(canUseVideoFrame());
-
-	// Also register the request so the player prepares at the zoomed/rotated size.
-	(void)_instance->frame(request);  // updates the track's requests; result ignored (we want YUV data)
-	return _instance->frameWithInfo(request);
 }
 
 QImage Pip::staticContent() const {

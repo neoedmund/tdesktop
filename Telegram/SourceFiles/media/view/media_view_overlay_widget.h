@@ -307,6 +307,9 @@ private:
 	void moveToScreen(bool inMove = false);
 	void updateGeometry(bool inMove = false);
 	void updateGeometryToScreen(bool inMove = false);
+	void pauseOpenGLForStateChange();
+	void resumeOpenGLAfterStateChange();
+	void finishOpenGLResume();
 	bool moveToNext(int delta);
 	void preloadData(int delta);
 
@@ -535,6 +538,8 @@ private:
 	Window::SessionController *findWindow(bool switchTo = true) const;
 
 	bool _opengl = false;
+	bool _openglPaused = false;
+	base::Timer _openglResumeTimer;
 	const std::unique_ptr<Ui::GL::Window> _wrap;
 	const not_null<Ui::RpWindow*> _window;
 	const std::unique_ptr<Platform::OverlayWidgetHelper> _helper;

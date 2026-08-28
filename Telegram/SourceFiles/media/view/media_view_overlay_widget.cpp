@@ -101,6 +101,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #endif // Q_OS_MAC
 
 #include <QtWidgets/QApplication>
+#include <QOpenGLWidget>
 #include <QtCore/QBuffer>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QWindow>
@@ -538,6 +539,7 @@ OverlayWidget::OverlayWidget()
 	_saveMsgTimer.setCallback([=, delay = st::mediaviewSaveMsgHiding] {
 		_saveMsgAnimation.start([=] { updateSaveMsg(); }, 1., 0., delay);
 	});
+	_openglResumeTimer.setCallback([=] { finishOpenGLResume(); });
 
 	_docRectImage = QImage(
 		st::mediaviewFileSize * style::DevicePixelRatio(),
@@ -585,6 +587,9 @@ OverlayWidget::OverlayWidget()
 			if (_windowed) {
 				savePosition();
 			}
+			if (_openglPaused) {
+				resumeOpenGLAfterStateChange();
+			}
 		} else if (type == QEvent::Close
 			&& !Core::Sandbox::Instance().isSavingSession()
 			&& !Core::Quitting()) {
@@ -617,6 +622,9 @@ OverlayWidget::OverlayWidget()
 			} else {
 				_windowed = true;
 				savePosition();
+			}
+			if (_openglPaused) {
+				resumeOpenGLAfterStateChange();
 			}
 		}
 		return base::EventFilterResult::Continue;
@@ -998,7 +1006,13 @@ void OverlayWidget::savePosition() {
 void OverlayWidget::updateGeometry(bool inMove) {
 	initFullScreen();
 	if (_fullscreen) {
-		updateGeometryToScreen(inMove);
+		if (inMove) {
+			// The compositor is already moving a fullscreen window.
+			// Calling setGeometry() here recreates the QOpenGLWidget FBO
+			// while the buffer is still locked and freezes the UI.
+		} else if (isHidden() || isMinimized() || _window->isFullScreen()) {
+			updateGeometryToScreen(inMove);
+		}
 	} else if (_windowed && _normalGeometryInited) {
 		DEBUG_LOG(("Viewer Pos: Setting %1, %2, %3, %4")
 			.arg(_normalGeometry.x())
@@ -1009,11 +1023,11 @@ void OverlayWidget::updateGeometry(bool inMove) {
 	}
 	if constexpr (!Platform::IsMac()) {
 		if (_fullscreen) {
-			if (!isHidden() && !isMinimized()) {
+			if (!isHidden() && !isMinimized() && !_window->isFullScreen()) {
 				_window->showFullScreen();
 			}
 		} else if (!_windowed) {
-			if (!isHidden() && !isMinimized()) {
+			if (!isHidden() && !isMinimized() && !_window->isMaximized()) {
 				_window->showMaximized();
 			}
 		}
@@ -1021,7 +1035,11 @@ void OverlayWidget::updateGeometry(bool inMove) {
 }
 
 void OverlayWidget::updateGeometryToScreen(bool inMove) {
-	const auto available = _window->screen()->geometry();
+	const auto screen = _window->screen();
+	if (!screen) {
+		return;
+	}
+	const auto available = screen->geometry();
 	if (_window->geometry() == available) {
 		return;
 	}
@@ -1030,7 +1048,45 @@ void OverlayWidget::updateGeometryToScreen(bool inMove) {
 		.arg(available.y())
 		.arg(available.width())
 		.arg(available.height()));
-	_window->setGeometry(available);
+	// Skip RpWindow::setGeometry() (SetGeometryAndScreen / setScreen),
+	// which can recreate the native window and the GL context.
+	_window->Ui::RpWidget::setGeometry(available);
+}
+
+void OverlayWidget::pauseOpenGLForStateChange() {
+	if (!_opengl) {
+		return;
+	}
+	const auto gl = qobject_cast<QOpenGLWidget*>(_widget.get());
+	if (!gl) {
+		return;
+	}
+	_openglResumeTimer.cancel();
+	if (!_openglPaused) {
+		_openglPaused = true;
+		gl->setUpdatesEnabled(false);
+		gl->doneCurrent();
+	}
+}
+
+void OverlayWidget::resumeOpenGLAfterStateChange() {
+	if (!_openglPaused) {
+		return;
+	}
+	_openglResumeTimer.callOnce(0);
+}
+
+void OverlayWidget::finishOpenGLResume() {
+	if (!_openglPaused) {
+		return;
+	}
+	_openglPaused = false;
+	const auto gl = qobject_cast<QOpenGLWidget*>(_widget.get());
+	if (!gl) {
+		return;
+	}
+	gl->setUpdatesEnabled(true);
+	gl->update();
 }
 
 void OverlayWidget::updateControlsGeometry() {
@@ -2430,6 +2486,7 @@ void OverlayWidget::toggleFullScreen(bool fullscreen) {
 	_fullscreen = fullscreen;
 	_windowed = !fullscreen;
 	initNormalGeometry();
+	pauseOpenGLForStateChange();
 	if constexpr (Platform::IsMac()) {
 		_helper->beforeShow(_fullscreen);
 		updateGeometry();
@@ -2445,6 +2502,7 @@ void OverlayWidget::toggleFullScreen(bool fullscreen) {
 	}
 	savePosition();
 	_helper->clearState();
+	resumeOpenGLAfterStateChange();
 }
 
 void OverlayWidget::activateControls() {
@@ -3906,6 +3964,7 @@ void OverlayWidget::showAndActivate() {
 	if (_windowed || Platform::IsMac()) {
 		_wasWindowedMode = false;
 	}
+	pauseOpenGLForStateChange();
 	updateGeometry();
 	if (_windowed || Platform::IsMac()) {
 		_window->showNormal();
@@ -3916,7 +3975,7 @@ void OverlayWidget::showAndActivate() {
 		_window->showMaximized();
 	}
 	_helper->afterShow(_fullscreen);
-	_widget->update();
+	resumeOpenGLAfterStateChange();
 	activate();
 }
 

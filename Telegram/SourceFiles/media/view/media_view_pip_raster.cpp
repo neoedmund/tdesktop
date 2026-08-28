@@ -138,7 +138,7 @@ Pip::FrameRequest Pip::RendererSW::frameRequest(
 		ContentGeometry geometry) const {
 	using namespace Images;
 	auto result = FrameRequest();
-	result.outer = (QSizeF(geometry.inner.size()) * style::DevicePixelRatio() * geometry.scale).toSize();
+	result.outer = geometry.inner.size() * style::DevicePixelRatio();
 	result.resize = result.outer;
 	result.rounding = CornersMaskRef(CornersMask(ImageRoundRadius::Large));
 	if (geometry.attached & (RectPart::Top | RectPart::Left)) {

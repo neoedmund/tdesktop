@@ -215,7 +215,6 @@ private:
 	[[nodiscard]] bool canUseVideoFrame() const;
 	[[nodiscard]] QImage videoFrame(const FrameRequest &request) const;
 	[[nodiscard]] Streaming::FrameWithInfo videoFrameWithInfo() const; // YUV
-	[[nodiscard]] Streaming::FrameWithInfo videoFrameWithInfo(const FrameRequest &request) const; // YUV with specific request size (for zoom etc)
 	[[nodiscard]] QImage staticContent() const;
 	[[nodiscard]] OverState computeState(QPoint position) const;
 	void setOverState(OverState state);
@@ -239,8 +238,6 @@ private:
 	void handleClose();
 	void rotate();
 	void handleWheel(not_null<QWheelEvent*> e);
-
-	void updateDesiredFrameSize();
 
 	void paintRadialLoadingContent(
 		QPainter &p,
